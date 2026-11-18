@@ -4,8 +4,6 @@ import api from '../utils/api';
 import { useToast } from '../context/ToastContext';
 
 export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
-  if (!isOpen) return null;
-
   const { showToast } = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -14,6 +12,8 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  if (!isOpen) return null;
 
   const handleThumbnailChange = (e) => {
     const file = e.target.files[0];

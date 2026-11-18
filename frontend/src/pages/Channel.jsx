@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Film, FolderHeart, MessageSquare, Info, Upload, Edit, Trash2, ShieldAlert, Heart, Calendar } from 'lucide-react';
+import { Film, FolderHeart, MessageSquare, Info, Upload, Edit, Trash2, ShieldAlert, Heart, Calendar, ArrowLeft, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../utils/api';
@@ -22,6 +22,10 @@ export default function Channel() {
   // Tab content states
   const [videos, setVideos] = useState([]);
   const [playlists, setPlaylists] = useState([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [showCreatePlaylistModal, setShowCreatePlaylistModal] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
   const [tweets, setTweets] = useState([]);
   const [videosLoading, setVideosLoading] = useState(false);
   const [playlistsLoading, setPlaylistsLoading] = useState(false);
@@ -197,6 +201,46 @@ export default function Channel() {
       showToast('Error updating profile', 'error');
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // Playlists logic
+  const handleCreatePlaylist = async (e) => {
+    e.preventDefault();
+    if (!newPlaylistName.trim()) return;
+
+    try {
+      const response = await api.post('/playlist', {
+        name: newPlaylistName.trim(),
+        description: newPlaylistDesc.trim(),
+      });
+      if (response.data?.success) {
+        showToast('Playlist created successfully', 'success');
+        setNewPlaylistName('');
+        setNewPlaylistDesc('');
+        setShowCreatePlaylistModal(false);
+        fetchTabContent('playlists');
+      }
+    } catch (err) {
+      showToast('Failed to create playlist', 'error');
+    }
+  };
+
+  const handleDeletePlaylist = async (playlistId, e) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this playlist?')) return;
+
+    try {
+      const response = await api.delete(`/playlist/${playlistId}`);
+      if (response.data?.success) {
+        showToast('Playlist deleted', 'success');
+        setPlaylists((prev) => prev.filter((p) => p._id !== playlistId));
+        if (selectedPlaylist?._id === playlistId) {
+          setSelectedPlaylist(null);
+        }
+      }
+    } catch (err) {
+      showToast('Failed to delete playlist', 'error');
     }
   };
 
@@ -477,27 +521,151 @@ export default function Channel() {
 
         {/* Playlists Tab */}
         {activeTab === 'playlists' && (
-          playlistsLoading ? (
-            <p style={{ color: 'var(--text-muted)' }}>Loading playlists...</p>
-          ) : playlists.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>No playlists created by this creator yet.</p>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
-              {playlists.map((playlist) => (
-                <div 
-                  key={playlist._id} 
-                  className="video-card" 
-                  style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}
+          selectedPlaylist ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <button 
+                  onClick={() => setSelectedPlaylist(null)} 
+                  className="btn btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                 >
-                  <div style={{ height: '120px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <FolderHeart size={40} style={{ color: 'var(--accent-purple)' }} />
-                  </div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{playlist.name}</h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    {playlist.videos?.length || 0} videos
+                  <ArrowLeft size={16} /> Back to Playlists
+                </button>
+                {isOwner && (
+                  <button 
+                    onClick={(e) => handleDeletePlaylist(selectedPlaylist._id, e)}
+                    className="btn btn-danger"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <Trash2 size={16} /> Delete Playlist
+                  </button>
+                )}
+              </div>
+
+              <div className="glass-card" style={{ padding: '24px' }}>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 8px 0' }}>{selectedPlaylist.name}</h2>
+                {selectedPlaylist.description && (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0 0 12px 0' }}>
+                    {selectedPlaylist.description}
                   </p>
+                )}
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {selectedPlaylist.videos?.length || 0} videos
+                </span>
+              </div>
+
+              {(!selectedPlaylist.videos || selectedPlaylist.videos.length === 0) ? (
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>
+                  No videos added to this playlist yet. You can add videos using the "Save" button under any video!
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+                  {selectedPlaylist.videos.map((vid) => (
+                    <VideoCard key={vid._id} video={vid} />
+                  ))}
                 </div>
-              ))}
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {isOwner && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  {!showCreatePlaylistModal ? (
+                    <button 
+                      onClick={() => setShowCreatePlaylistModal(true)} 
+                      className="btn btn-primary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Plus size={16} /> Create Playlist
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
+              {isOwner && showCreatePlaylistModal && (
+                <form 
+                  onSubmit={handleCreatePlaylist} 
+                  className="glass-card" 
+                  style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '500px' }}
+                >
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Create New Playlist</h3>
+                  <input
+                    type="text"
+                    placeholder="Playlist name..."
+                    className="form-control"
+                    value={newPlaylistName}
+                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                    autoFocus
+                  />
+                  <textarea
+                    placeholder="Description (optional)..."
+                    className="form-control"
+                    value={newPlaylistDesc}
+                    onChange={(e) => setNewPlaylistDesc(e.target.value)}
+                    rows={2}
+                  />
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowCreatePlaylistModal(false)} 
+                      className="btn btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={!newPlaylistName.trim()}>
+                      Create
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {playlistsLoading ? (
+                <p style={{ color: 'var(--text-muted)' }}>Loading playlists...</p>
+              ) : playlists.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>
+                  No playlists created yet.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
+                  {playlists.map((playlist) => (
+                    <div 
+                      key={playlist._id} 
+                      className="video-card glass-card" 
+                      onClick={() => setSelectedPlaylist(playlist)}
+                      style={{ 
+                        padding: '16px', 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '10px', 
+                        cursor: 'pointer',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ height: '120px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FolderHeart size={40} style={{ color: 'var(--accent-purple)' }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div>
+                          <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{playlist.name}</h3>
+                          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                            {playlist.videos?.length || 0} videos
+                          </p>
+                        </div>
+                        {isOwner && (
+                          <button
+                            onClick={(e) => handleDeletePlaylist(playlist._id, e)}
+                            className="btn-icon"
+                            title="Delete playlist"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         )}

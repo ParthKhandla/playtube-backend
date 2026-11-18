@@ -366,8 +366,14 @@ const addVideoToWatchHistory = asyncHandler(async (req, res) => {
   }
   const videoObjectId = new mongoose.Types.ObjectId(videoId);
   const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (!Array.isArray(user.watchhistory)) {
+    user.watchhistory = [];
+  }
   const isVideoAlreadyInHistory = user.watchhistory.some((id) =>
-    id.equals(videoObjectId)
+    id && id.equals && id.equals(videoObjectId)
   );
   if (!isVideoAlreadyInHistory) {
     user.watchhistory.unshift(videoObjectId);

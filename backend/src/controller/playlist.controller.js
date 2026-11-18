@@ -10,26 +10,25 @@ const createplaylist = asyncHandler(async (req, res) => {
   const { name, description } = req.body;
   const userId = req.user?._id;
 
-  if (!name || !description) {
-    throw new ApiError(400, "All details are required");
+  if (!name || !name.trim()) {
+    throw new ApiError(400, "Playlist name is required");
   }
 
   const playlist = await Playlist.create({
-    name,
-    description,
-    userId,
+    name: name.trim(),
+    description: description ? description.trim() : "",
     owner: userId,
+    videos: [],
   });
 
   return res
-    .status(200)
-    .json(new ApiResponse(200, playlist, "playlist created successfully"));
+    .status(201)
+    .json(new ApiResponse(201, playlist, "Playlist created successfully"));
 });
 
 const getUserplaylists = asyncHandler(async (req, res) => {
   const { userId } = req.params;
 
-  // Validate userId
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     throw new ApiError(400, "Invalid user ID");
   }
@@ -46,7 +45,20 @@ const getUserplaylists = asyncHandler(async (req, res) => {
         localField: "owner",
         foreignField: "_id",
         as: "owner",
+        pipeline: [
+          {
+            $project: {
+              avatar: 1,
+              username: 1,
+              fullname: 1,
+              _id: 1,
+            },
+          },
+        ],
       },
+    },
+    {
+      $unwind: { path: "$owner", preserveNullAndEmptyArrays: true },
     },
     {
       $lookup: {
@@ -66,6 +78,7 @@ const getUserplaylists = asyncHandler(async (req, res) => {
                   $project: {
                     avatar: 1,
                     username: 1,
+                    fullname: 1,
                     _id: 1,
                   },
                 },
@@ -73,7 +86,7 @@ const getUserplaylists = asyncHandler(async (req, res) => {
             },
           },
           {
-            $unwind: "$owner",
+            $unwind: { path: "$owner", preserveNullAndEmptyArrays: true },
           },
         ],
       },
@@ -84,27 +97,20 @@ const getUserplaylists = asyncHandler(async (req, res) => {
           $sum: "$videos.views",
         },
         totalVideos: {
-          $size: "$videos",
+          $size: { $ifNull: ["$videos", []] },
         },
       },
     },
   ]);
 
-  if (!playlists || playlists.length === 0) {
-    return res
-      .status(200)
-      .json(new ApiResponse(200, [], "No playlists found for this user"));
-  }
-
   return res
     .status(200)
-    .json(new ApiResponse(200, playlists, "playlists fetched successfully"));
+    .json(new ApiResponse(200, playlists || [], "Playlists fetched successfully"));
 });
 
 const getplaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
-  // Validate playlistId
   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
     throw new ApiError(400, "Invalid playlist ID");
   }
@@ -121,10 +127,20 @@ const getplaylistById = asyncHandler(async (req, res) => {
         localField: "owner",
         foreignField: "_id",
         as: "owner",
+        pipeline: [
+          {
+            $project: {
+              avatar: 1,
+              username: 1,
+              fullname: 1,
+              _id: 1,
+            },
+          },
+        ],
       },
     },
     {
-      $unwind: "$owner",
+      $unwind: { path: "$owner", preserveNullAndEmptyArrays: true },
     },
     {
       $lookup: {
@@ -144,6 +160,7 @@ const getplaylistById = asyncHandler(async (req, res) => {
                   $project: {
                     avatar: 1,
                     username: 1,
+                    fullname: 1,
                     _id: 1,
                   },
                 },
@@ -151,7 +168,7 @@ const getplaylistById = asyncHandler(async (req, res) => {
             },
           },
           {
-            $unwind: "$owner",
+            $unwind: { path: "$owner", preserveNullAndEmptyArrays: true },
           },
         ],
       },
@@ -162,30 +179,41 @@ const getplaylistById = asyncHandler(async (req, res) => {
           $sum: "$videos.views",
         },
         totalVideos: {
-          $size: "$videos",
+          $size: { $ifNull: ["$videos", []] },
         },
       },
     },
   ]);
 
   if (!playlist || playlist.length === 0) {
-    throw new ApiError(404, "playlist not found");
+    throw new ApiError(404, "Playlist not found");
   }
 
   return res
     .status(200)
-    .json(new ApiResponse(200, playlist[0], "playlist fetched successfully"));
+    .json(new ApiResponse(200, playlist[0], "Playlist fetched successfully"));
 });
 
 const addVideoToplaylist = asyncHandler(async (req, res) => {
   const { playlistId, videoId } = req.params;
   if (!playlistId || !videoId) {
-    throw new ApiError(404, "playlistId and videoId are required");
+    throw new ApiError(400, "playlistId and videoId are required");
   }
-  const playlist = await Playlist.findByIdAndUpdate(
+
+  const playlist = await Playlist.findById(playlistId);
+  if (!playlist) {
+    throw new ApiError(404, "Playlist not found");
+  }
+
+  if (playlist.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You do not have permission to modify this playlist");
+  }
+
+  // Use $addToSet to avoid duplicate entries in the same playlist
+  const updatedPlaylist = await Playlist.findByIdAndUpdate(
     playlistId,
     {
-      $push: {
+      $addToSet: {
         videos: videoId,
       },
     },
@@ -198,15 +226,25 @@ const addVideoToplaylist = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, playlist, "video added to playlist"));
+    .json(new ApiResponse(200, updatedPlaylist, "Video added to playlist successfully"));
 });
 
 const removeVideoFromplaylist = asyncHandler(async (req, res) => {
   const { playlistId, videoId } = req.params;
   if (!playlistId || !videoId) {
-    throw new ApiError(404, "playlistId and videoId are required");
+    throw new ApiError(400, "playlistId and videoId are required");
   }
-  const playlist = await Playlist.findByIdAndUpdate(
+
+  const playlist = await Playlist.findById(playlistId);
+  if (!playlist) {
+    throw new ApiError(404, "Playlist not found");
+  }
+
+  if (playlist.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You do not have permission to modify this playlist");
+  }
+
+  const updatedPlaylist = await Playlist.findByIdAndUpdate(
     playlistId,
     {
       $pull: {
@@ -220,32 +258,53 @@ const removeVideoFromplaylist = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, playlist, "video removed from playlist"));
+    .json(new ApiResponse(200, updatedPlaylist, "Video removed from playlist successfully"));
 });
 
 const deleteplaylist = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
   if (!playlistId) {
-    throw new ApiError(404, "playlistId is required");
+    throw new ApiError(400, "playlistId is required");
   }
-  const playlist = await Playlist.findByIdAndDelete(playlistId);
+
+  const playlist = await Playlist.findById(playlistId);
+  if (!playlist) {
+    throw new ApiError(404, "Playlist not found");
+  }
+
+  if (playlist.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You do not have permission to delete this playlist");
+  }
+
+  await Playlist.findByIdAndDelete(playlistId);
+
   return res
     .status(200)
-    .json(new ApiResponse(200, playlist, "playlist deleted successfully"));
+    .json(new ApiResponse(200, null, "Playlist deleted successfully"));
 });
 
 const updateplaylist = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
   const { name, description } = req.body;
   if (!playlistId || (!name && !description)) {
-    throw new ApiError(400, "Missing playlist or name or description");
+    throw new ApiError(400, "Missing playlistId or fields to update");
   }
-  const playlist = await Playlist.findByIdAndUpdate(
+
+  const playlist = await Playlist.findById(playlistId);
+  if (!playlist) {
+    throw new ApiError(404, "Playlist not found");
+  }
+
+  if (playlist.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You do not have permission to update this playlist");
+  }
+
+  const updatedPlaylist = await Playlist.findByIdAndUpdate(
     playlistId,
     {
       $set: {
-        ...(name && { name }),
-        ...(description && { description }),
+        ...(name && { name: name.trim() }),
+        ...(description !== undefined && { description: description.trim() }),
       },
     },
     {
@@ -255,7 +314,7 @@ const updateplaylist = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, playlist, "Update playlist successfully"));
+    .json(new ApiResponse(200, updatedPlaylist, "Playlist updated successfully"));
 });
 
 export {

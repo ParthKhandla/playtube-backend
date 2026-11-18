@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Eye, ThumbsUp, Users, Plus, Edit2, Trash2, Globe, Shield, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Play, Eye, ThumbsUp, Users, Plus, Edit2, Trash2, Globe, Shield, RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../utils/api';

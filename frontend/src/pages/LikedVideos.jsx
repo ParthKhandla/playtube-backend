@@ -7,14 +7,17 @@ import api from '../utils/api';
 import VideoCard from '../components/VideoCard';
 
 export default function LikedVideos() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
 
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchLikedVideos = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const response = await api.get('/like/videos');
@@ -34,13 +37,41 @@ export default function LikedVideos() {
   };
 
   useEffect(() => {
-    fetchLikedVideos();
-  }, [user]);
+    if (!authLoading) {
+      fetchLikedVideos();
+    }
+  }, [user, authLoading]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
         <div className="skeleton" style={{ width: '50px', height: '50px', borderRadius: '50%' }} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div 
+        className="glass-card" 
+        style={{ 
+          padding: '60px 40px', 
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px',
+          marginTop: '40px'
+        }}
+      >
+        <Heart size={40} style={{ color: 'var(--accent-red)' }} />
+        <h3>Sign in to view liked videos</h3>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '400px' }}>
+          Keep track of all your favorite videos. Sign in to access your liked videos playlist.
+        </p>
+        <Link to="/auth" className="btn btn-primary">
+          Sign In
+        </Link>
       </div>
     );
   }

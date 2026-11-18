@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ThumbsUp, MessageSquare, Send, Trash2, Edit2, Check, X, ShieldAlert } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Send, Trash2, Edit2, Check, X, ShieldAlert, FolderPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../utils/api';
 import { formatViews, formatTimeAgo } from '../utils/format';
 import VideoCard from '../components/VideoCard';
+import PlaylistModal from '../components/PlaylistModal';
 
 export default function VideoDetail() {
   const { videoId } = useParams();
@@ -24,8 +25,15 @@ export default function VideoDetail() {
   // Like & Subscription States
   const [likesCount, setLikesCount] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscribersCount, setSubscribersCount] = useState(0);
+
+  // Playlist State
+  const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
+
+  // Track recorded views per videoId to prevent duplicate view increments
+  const recordedViewRef = useRef(null);
 
   // Comments States
   const [comments, setComments] = useState([]);
@@ -47,12 +55,6 @@ export default function VideoDetail() {
         const videoData = videoResponse.data.data;
         setVideo(videoData);
 
-        // Record watch history
-        api.post('/users/addVideoToWatchHistory', { videoId }).catch(() => {});
-        
-        // Manually increment view count in backend
-        api.patch(`/videos/v/${videoId}`).catch(() => {});
-
         // Fetch creator dashboard or subscription status if owner is fetched
         if (videoData.owner?._id) {
           fetchSubscriptionStatus(videoData.owner._id);
@@ -68,7 +70,8 @@ export default function VideoDetail() {
       // Check if current user liked this video
       const likedResponse = await api.get(`/like/check/v/${videoId}`);
       if (likedResponse.data?.success) {
-        setIsLiked(likedResponse.data.data.liked);
+        const liked = Boolean(likedResponse.data.data?.isLiked ?? likedResponse.data.data?.liked);
+        setIsLiked(liked);
       }
 
     } catch (err) {
@@ -127,6 +130,21 @@ export default function VideoDetail() {
     }
   };
 
+  // Increment view count and record watch history exactly once per video session
+  useEffect(() => {
+    if (videoId && recordedViewRef.current !== videoId) {
+      recordedViewRef.current = videoId;
+      api.patch(`/videos/v/${videoId}`)
+        .then((res) => {
+          if (res.data?.data?.views !== undefined) {
+            setVideo((prev) => (prev ? { ...prev, views: res.data.data.views } : prev));
+          }
+        })
+        .catch(() => {});
+      api.post('/users/addVideoToWatchHistory', { videoId }).catch(() => {});
+    }
+  }, [videoId]);
+
   useEffect(() => {
     if (!user) {
       navigate('/auth');
@@ -138,15 +156,25 @@ export default function VideoDetail() {
   }, [videoId, user]);
 
   const handleLikeToggle = async () => {
+    if (!user) {
+      showToast('Please log in to like this video', 'info');
+      return;
+    }
+    if (likeLoading) return;
+
     try {
+      setLikeLoading(true);
       const response = await api.post(`/like/toggle/v/${videoId}`);
       if (response.data?.success) {
-        setIsLiked(!isLiked);
-        setLikesCount((prev) => (isLiked ? prev - 1 : prev + 1));
-        showToast(isLiked ? 'Video unliked' : 'Video liked!', 'success');
+        const newIsLiked = Boolean(response.data.data?.isLiked ?? response.data.data?.liked);
+        setIsLiked(newIsLiked);
+        setLikesCount((prev) => (newIsLiked ? prev + 1 : Math.max(0, prev - 1)));
+        showToast(newIsLiked ? 'Video liked!' : 'Video unliked', 'success');
       }
     } catch (err) {
       showToast('Failed to toggle like status', 'error');
+    } finally {
+      setLikeLoading(false);
     }
   };
 
@@ -159,9 +187,10 @@ export default function VideoDetail() {
     try {
       const response = await api.post(`/subscribe/c/${video.owner._id}`);
       if (response.data?.success) {
-        setIsSubscribed(!isSubscribed);
-        setSubscribersCount((prev) => (isSubscribed ? prev - 1 : prev + 1));
-        showToast(isSubscribed ? 'Unsubscribed' : 'Subscribed to channel!', 'success');
+        const newSubState = Boolean(response.data.data?.isSubscribed ?? !isSubscribed);
+        setIsSubscribed(newSubState);
+        setSubscribersCount((prev) => (newSubState ? prev + 1 : Math.max(0, prev - 1)));
+        showToast(newSubState ? 'Subscribed to channel!' : 'Unsubscribed', 'success');
       }
     } catch (err) {
       showToast('Failed to toggle subscription', 'error');
@@ -280,11 +309,28 @@ export default function VideoDetail() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button 
                 onClick={handleLikeToggle} 
+                disabled={likeLoading}
                 className={`btn ${isLiked ? 'btn-primary' : 'btn-secondary'}`}
                 style={{ padding: '8px 16px', borderRadius: '20px', fontSize: '0.85rem' }}
               >
                 <ThumbsUp size={16} />
                 <span>{likesCount} Likes</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  if (!user) {
+                    showToast('Please log in to save to playlists', 'info');
+                    return;
+                  }
+                  setPlaylistModalOpen(true);
+                }} 
+                className="btn btn-secondary"
+                style={{ padding: '8px 16px', borderRadius: '20px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+                title="Save video to playlist"
+              >
+                <FolderPlus size={16} />
+                <span>Save</span>
               </button>
             </div>
           </div>
@@ -503,6 +549,12 @@ export default function VideoDetail() {
         </div>
 
       </div>
+
+      <PlaylistModal
+        isOpen={playlistModalOpen}
+        onClose={() => setPlaylistModalOpen(false)}
+        videoId={videoId}
+      />
     </div>
   );
 }
