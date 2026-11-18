@@ -26,6 +26,11 @@ app.use(
       // Allow requests with no origin (Postman, mobile apps, etc.)
       if (!origin) return callback(null, true);
 
+      // Support any local development origin automatically
+      if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+        return callback(null, true);
+      }
+
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }

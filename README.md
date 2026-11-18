@@ -1,142 +1,119 @@
-# PlayTube Backend
+# PlayTube 🎬
 
-PlayTube Backend is a robust, production-ready, industry-standard video sharing and social media RESTful API built on the **Node.js** runtime using **Express.js** and **MongoDB/Mongoose**. It replicates the core backend functionality of YouTube, featuring complex database aggregation pipelines, secure JWT-based multi-token authentication, media asset processing with cloud integration, and a social network engagement system.
-
----
-
-## 🛠️ Tech Stack & Key Libraries
-* **Runtime Environment**: Node.js
-* **Web Framework**: Express.js
-* **Database**: MongoDB (Object modeling via Mongoose)
-* **Authentication**: JSON Web Tokens (JWT) & Bcrypt (Password encryption)
-* **Media Processing**: Multer (Local staging) & Cloudinary (Cloud asset CDN)
-* **Data Pagination**: `mongoose-aggregate-paginate-v2` for high-performance video feed queries
+PlayTube is a full-stack, production-ready video sharing and social media platform replicating core YouTube functionality. It features a modern **React + Vite** frontend and a robust **Node.js + Express.js + MongoDB** backend with complex aggregation pipelines, JWT authentication, media uploads, and creator analytics.
 
 ---
 
-## 📂 System Architecture & Features
+## 📂 Project Structure
 
-### 1. User Management & Security
-* **Authentication**: Password hashing using `bcrypt`. Dual-token rotation flow using **Access Tokens** (short-lived) and **Refresh Tokens** (long-lived, stored securely in HTTP-only cookies).
-* **Profile Settings**: Routes for updating account details, updating avatars/cover images, changing passwords, and retrieving authenticated profile states.
-* **History Tracking**: Built-in watch history tracking embedded directly within the database schema.
-
-### 2. Video Pipeline
-* **Upload Mechanism**: Uses Multer to stage uploads locally in `public/temp/`, which are then streamed to Cloudinary. Includes an automatic local fallback mechanism if Cloudinary is not configured.
-* **Control Center**: Video publishing, editing metadata, deleting files, toggling publish status (public/private), and view-counter analytics.
-* **Optimized Feed**: Advanced aggregation pipelines for searching, sorting, and paginating video feeds based on keywords, creators, and upload dates.
-
-### 3. Social Interaction & Community
-* **Subscribers**: Channel subscription tracking (queries channel subscribers and lists channels a user is subscribed to).
-* **Likes & Dislikes**: Toggleable likes across three separate entities: **Videos**, **Comments**, and **Tweets**.
-* **Comments**: Create, read, update, and delete comments on any published video.
-* **Community Tweets**: Text-based updates matching YouTube's "Community Tab," allowing creators to share news and interact with their subscriber base.
-
-### 4. Creator Dashboard & Playlists
-* **Playlists**: Full-featured playlist CRUD (creating, editing metadata, adding/removing videos, and querying collections).
-* **Dashboard Analytics**: Real-time aggregation of creator stats, computing total views, total subscribers, total videos, and total likes.
-
----
-
-## 🗺️ API Endpoints Reference
-
-### 🔐 Authentication & Users
-| Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- |
-| **POST** | `/api/v1/users/register` | Register a new user account | No |
-| **POST** | `/api/v1/users/login` | Login user and issue tokens | No |
-| **POST** | `/api/v1/users/logout` | Logout user and clear cookies | Yes |
-| **POST** | `/api/v1/users/refresh-token` | Renew expired Access Token | No |
-| **POST** | `/api/v1/users/change-password` | Update account password | Yes |
-| **GET** | `/api/v1/users/current-user` | Retrieve profile of logged-in user | Yes |
-| **PATCH** | `/api/v1/users/update-account` | Update account details | Yes |
-| **PATCH** | `/api/v1/users/avatar` | Update user avatar image | Yes |
-| **PATCH** | `/api/v1/users/cover-image` | Update user cover image | Yes |
-| **GET** | `/api/v1/users/c/:username` | Get channel profile details | Yes |
-| **GET** | `/api/v1/users/history` | Get user watch history | Yes |
-
-### 📹 Videos
-| Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/v1/videos` | Fetch paginated/filtered video feed | No |
-| **POST** | `/api/v1/videos` | Publish a new video (with files) | Yes |
-| **GET** | `/api/v1/videos/v/:videoId` | Get single video and increment views | No |
-| **PATCH** | `/api/v1/videos/uv/:videoId` | Update video details and thumbnail | Yes |
-| **DELETE** | `/api/v1/videos/uv/:videoId` | Delete a video file and record | Yes |
-| **PATCH** | `/api/v1/videos/toggle/publish/:videoId` | Toggle video privacy state | Yes |
-
-### 📁 Playlists
-| Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- |
-| **POST** | `/api/v1/playlist` | Create a new playlist | Yes |
-| **GET** | `/api/v1/playlist/:playlistId` | Get playlist details and videos | Yes |
-| **PATCH** | `/api/v1/playlist/:playlistId` | Update playlist name/description | Yes |
-| **DELETE** | `/api/v1/playlist/:playlistId` | Delete a playlist | Yes |
-| **PATCH** | `/api/v1/playlist/add/:videoId/:playlistId` | Add a video to a playlist | Yes |
-| **PATCH** | `/api/v1/playlist/remove/:videoId/:playlistId` | Remove a video from a playlist | Yes |
-| **GET** | `/api/v1/playlist/user/:userId` | Get all playlists of a user | Yes |
-
-### 💬 Comments & Tweets
-| Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/v1/comments/:videoId` | Get comments on a video | No |
-| **POST** | `/api/v1/comments/:videoId` | Add a comment to a video | Yes |
-| **PATCH** | `/api/v1/comments/c/:commentId` | Edit a comment | Yes |
-| **DELETE** | `/api/v1/comments/c/:commentId` | Delete a comment | Yes |
-| **POST** | `/api/v1/tweets` | Post a text update | Yes |
-| **GET** | `/api/v1/tweets/user/:userId` | Get all tweets from a user | Yes |
-| **PATCH** | `/api/v1/tweets/:tweetId` | Edit a tweet | Yes |
-| **DELETE** | `/api/v1/tweets/:tweetId` | Delete a tweet | Yes |
-
-### 🔔 Subscriptions & Likes
-| Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- |
-| **POST** | `/api/v1/subscriptions/c/:channelId` | Toggle subscription on a channel | Yes |
-| **GET** | `/api/v1/subscriptions/c/:channelId` | Get channel subscriber list | Yes |
-| **GET** | `/api/v1/subscriptions/u/:subscriberId` | Get subscribed channels list | Yes |
-| **POST** | `/api/v1/likes/toggle/v/:videoId` | Toggle like status on a video | Yes |
-| **POST** | `/api/v1/likes/toggle/c/:commentId` | Toggle like status on a comment | Yes |
-| **POST** | `/api/v1/likes/toggle/t/:tweetId` | Toggle like status on a tweet | Yes |
-| **GET** | `/api/v1/likes/videos` | Get list of all liked videos | Yes |
-
-### 📊 Dashboard & System
-| Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/v1/dashboard/stats` | Fetch channel views, subs, and likes | Yes |
-| **GET** | `/api/v1/dashboard/videos` | Fetch all videos uploaded by channel | Yes |
-| **GET** | `/api/v1/healthcheck` | Query API availability status | No |
-
----
-
-## ⚙️ Environment Variables Config
-Create a `.env` file in the project root:
-```env
-PORT=7000
-MONGO_URI=mongodb://127.0.0.1:27017/socialmedia
-CORS_ORIGIN=http://localhost:3000
-ACCESS_TOKEN_SECRET=858d4bfd6368d4073041c2c2f7b8bb13b9a061456a12b2e88a38a7c2937ee2e9
-ACCESS_TOKEN_EXPIRY=1d
-REFRESH_TOKEN_SECRET=4f17ba3f86e9262f3dc234c9de63a1fa0b323c21a4f0cd238d8d3cfb5f6cd6a7
-REFRESH_TOKEN_EXPIRY=10d
-
-# Optional Cloudinary Config (Stall fallback writes to public/temp/)
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
+```text
+playtube/
+├── backend/                       # Express.js REST API
+│   ├── src/                       # Controllers, models, routes, middlewares, utils
+│   ├── public/                    # Local temporary storage for uploads
+│   ├── .env                       # Backend environment variables
+│   └── package.json
+├── frontend/                      # React 19 + Vite Single-Page Application
+│   ├── src/                       # Components, pages, context, styles
+│   ├── public/                    # Static assets
+│   └── package.json
+├── package.json                   # Root workspace scripts
+└── README.md
 ```
 
 ---
 
-## 🏁 Local Installation Guide
+## 🛠️ Tech Stack
 
-1. **Clone & Install Dependencies**:
-   ```bash
-   npm install
-   ```
-2. **Start MongoDB**:
-   Ensure a local MongoDB server is running on port `27017` or insert your cloud database URI inside the `.env` file.
-3. **Run Dev Environment**:
-   ```bash
-   npm run dev
-   ```
-   The backend service will launch on `http://localhost:7000`.
+### Frontend
+- **Framework**: React 19 + Vite
+- **Routing**: React Router 7
+- **Icons**: Lucide React
+- **HTTP Client**: Axios with credentials and interceptors
+- **Styling**: Modern responsive CSS & Toast notifications
+
+### Backend
+- **Runtime & Framework**: Node.js & Express.js
+- **Database**: MongoDB with Mongoose (Aggregation pipelines & pagination)
+- **Authentication**: JWT (Access & Refresh tokens stored in HTTP-only cookies) & Bcrypt
+- **File Uploads**: Multer & Cloudinary CDN (with local fallback storage)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js (v18+)
+- MongoDB Atlas cluster URI or local MongoDB instance
+
+### 2. Installation
+Install dependencies for both frontend and backend:
+
+```bash
+# Install root, backend, and frontend dependencies
+npm install --prefix backend
+npm install --prefix frontend
+```
+
+### 3. Backend Environment Setup
+Create a `.env` file in the `backend/` directory:
+
+```env
+PORT=7000
+MONGO_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/playtube?retryWrites=true&w=majority
+CORS_ORIGIN=http://localhost:5173
+ACCESS_TOKEN_SECRET=your_access_token_secret_here
+ACCESS_TOKEN_EXPIRY=1d
+REFRESH_TOKEN_SECRET=your_refresh_token_secret_here
+REFRESH_TOKEN_EXPIRY=10d
+
+# Cloudinary (Optional - falls back to public/temp/ if omitted)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+### 4. Running the Development Servers
+
+You can run both services from the root folder:
+
+```bash
+# Run backend server (http://localhost:7000)
+npm run dev:backend
+
+# Run frontend dev server (http://localhost:5173)
+npm run dev:frontend
+```
+
+Or run them individually inside their folders:
+```bash
+# Backend
+cd backend && npm run dev
+
+# Frontend
+cd frontend && npm run dev
+```
+
+---
+
+## 🗺️ API Endpoints Summary
+
+| Group | Method | Endpoint | Description |
+| :--- | :--- | :--- | :--- |
+| **Auth** | POST | `/api/v1/users/register` | Register new account |
+| **Auth** | POST | `/api/v1/users/login` | Login and receive tokens/cookies |
+| **Auth** | POST | `/api/v1/users/logout` | Logout and clear session cookies |
+| **Auth** | POST | `/api/v1/users/refresh-token` | Renew expired access token |
+| **Videos**| GET | `/api/v1/videos` | Paginated and filtered video feed |
+| **Videos**| POST | `/api/v1/videos` | Upload & publish a new video |
+| **Videos**| GET | `/api/v1/videos/v/:videoId` | Get single video & increment views |
+| **Comments**| GET/POST | `/api/v1/comments/:videoId` | View or post comments on a video |
+| **Likes** | POST | `/api/v1/likes/toggle/v/:videoId` | Toggle like on a video |
+| **Subscribers** | POST | `/api/v1/subscriptions/c/:channelId` | Toggle subscription on a channel |
+| **Dashboard** | GET | `/api/v1/dashboard/stats` | Channel analytics (views, subs, likes) |
+| **System**| GET | `/api/v1/healthcheck` | Healthcheck endpoint |
+
+---
+
+## 📄 License
+ISC

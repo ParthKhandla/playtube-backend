@@ -3,6 +3,9 @@
 import mongoose from "mongoose";
 import { Video } from "../model/video.model.js";
 import { User } from "../model/user.model.js";
+import { Comment } from "../model/comments.model.js";
+import { Like } from "../model/like.model.js";
+import { Playlist } from "../model/playlist.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -102,8 +105,8 @@ const publishAVideo = asyncHandler(async (req, res) => {
   }
 
   const newVideo = await Video.create({
-    videoFile: uploadedVideo.url,
-    thumbnail: uploadedThumbnail.url,
+    videoFile: uploadedVideo.secure_url || uploadedVideo.url,
+    thumbnail: uploadedThumbnail.secure_url || uploadedThumbnail.url,
     title,
     description,
     duration: uploadedVideo.duration,
@@ -175,7 +178,7 @@ const updateVideo = asyncHandler(async (req, res) => {
     if (!uploadedThumb?.url) {
       throw new ApiError(500, "Thumbnail upload failed");
     }
-    updateFields.thumbnail = uploadedThumb.url;
+    updateFields.thumbnail = uploadedThumb.secure_url || uploadedThumb.url;
   }
 
   const updatedVideo = await Video.findByIdAndUpdate(
@@ -218,6 +221,14 @@ const deleteVideo = asyncHandler(async (req, res) => {
 
   // Delete the video
   await Video.findByIdAndDelete(videoId);
+
+  // Cascade delete associated comments and likes
+  await Comment.deleteMany({ video: videoId });
+  await Like.deleteMany({ video: videoId });
+
+  // Remove video references from playlists and watch histories
+  await Playlist.updateMany({}, { $pull: { videos: videoId } });
+  await User.updateMany({}, { $pull: { watchhistory: videoId } });
 
   return res
     .status(200)
